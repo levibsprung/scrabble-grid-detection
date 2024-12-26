@@ -131,7 +131,6 @@ def find_board(img):
     # Join the masks
     red_mask = mask0 | mask1
     
-    #cv2.imshow("red", red_mask)   # this colormap will display in black / white
     eroded = cv2.erode(red_mask,kernel,iterations = 8)
     red_dilated = cv2.dilate(eroded,kernel,iterations = 9)
     red_dilated = cv2.erode(red_dilated,kernel,iterations = 5)
@@ -309,8 +308,7 @@ def find_board(img):
             print(corners)
             # improve the chance of getting bottom row and right most column 
             corners2 = ((corners[0][0] + 4, corners[0][1] - 2),(corners[1][0], corners[1][1] - 2),(corners[2][0], corners[2][1]),(corners[3][0] + 4,corners[3][1]))
-            #corners2 = (corners[0][0] + 2, corners[0][1]), (corners[1][0], corners[1][1]), (corner[2][0], corners[2][1] + 2), (corners[3][0] + 2, corners[3][1] + 2)
-
+ 
             perspective = get_perspective(img, corners2)
             #cv2.imshow("perspective", perspective)
             
@@ -319,7 +317,6 @@ def find_board(img):
             predicted_board = predict_board(perspective, False)
             predicted_board_list.append((predicted_board, corners2))
             #ocr = PaddleOCR(use_angle_cls=True, lang='en') # need to run only once to download and load model into memory
-    #
             #result = ocr.ocr(gray, cls=True)
             #for idx in range(len(result)):
             #    res = result[idx]
@@ -453,7 +450,6 @@ def predict_board(board, flip):
     #    #cv2.waitKey(0)
     #    if err > 0.3:
     #        print("wrong detection")
-#
     #        cv2.waitKey(0)
     #        predicted_board[tile_coord[0]][tile_coord[1]] = "+"
         
