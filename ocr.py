@@ -43,17 +43,12 @@ def mse(img1, median_color):
  
     blank_img = np.ones((h, w, channel), dtype='uint8')
     blank_img[:] = median_color
-    #cv2.imshow("blank_img", blank_img)
     
     blank_img_hsv = cv2.cvtColor(blank_img, cv2.COLOR_BGR2HSV)
     diff = cv2.absdiff(img1, blank_img_hsv)
-    #print(diff)
-    #print(diff.shape)
-    #print("diff[:,0,0]")
     hue_only = diff[:,:,0]
     saturation_only = diff[:,:,1]
     value_only = diff[:,:,2]
-    #print(hue_only)
     hue_err = np.sum((hue_only / 180) **2)
     saturation_err = np.sum((saturation_only/255)**2)
     value_err = np.sum((value_only/255)**2)
@@ -80,7 +75,6 @@ def get_perspective(img, location, height = 720, width = 720):
     pts1 = np.float32([location[0], location[3], location[1], location[2]])
     pts2 = np.float32([[width, 0], [width, height], [0, 0], [0, height]])
 
-    # Apply Perspective Transform Algorithm
     matrix = cv2.getPerspectiveTransform(pts1, pts2)
     result = cv2.warpPerspective(img, matrix, (width, height))
     return result
@@ -90,7 +84,6 @@ def get_InvPerspective(img, masked_num, location, height = 720, width = 720):
     pts1 = np.float32([[0, 0], [width, 0], [0, height], [width, height]])
     pts2 = np.float32([location[0], location[3], location[1], location[2]])
 
-    # Apply Perspective Transform Algorithm
     matrix = cv2.getPerspectiveTransform(pts1, pts2)
     result = cv2.warpPerspective(masked_num, matrix, (img.shape[1], img.shape[0]))
     return result
@@ -122,7 +115,7 @@ def find_board(img):
     height, width, channels = img.shape
     img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     
-    # Red squares #########################################################################################################
+    # Find red squares
     kernel = np.ones((3,3),np.uint8)
 
     # Lower mask (0-10)
@@ -168,12 +161,8 @@ def find_board(img):
         cv2.drawContours(newimg3, contour, -1, (0, 255, 0), 3)
         cv2.drawContours(newimg2, approx, -1, (0, 255, 0), 3)
     
-    #print(red_dots)
-    #cv2.imshow("Contour before approx", newimg3)
-    #cv2.imshow("Contour after approx", newimg2)
-    #Lines ##############################################################################################################################
-
-	# --- 1 step --- find all possible lines (that makes sense) ----------------
+    # Find lines 
+	# --- 1 step --- find all possible lines ----------------
     segments = pSLID(img)
     raw_lines = SLID(img, segments)
     lines = slid_tendency(raw_lines)   
@@ -219,15 +208,7 @@ def find_board(img):
             lattice_pts.append(line_intersection(v,h))
     lattice_pts.sort()
     print(len(lattice_pts))
-    #cv2.waitKey(0)
-    #print("reference points")
-    #print(h_ref_pts)
-    #print(v_ref_pts)
-    #print("candidate lines")
-    #print(ver_left)
-    #print(ver_right)
-    #print(hor_top)
-    #print(hor_bottom)
+
     for line in ver_left + ver_right :
         x1,y1,x2,y2 = line[0][0],line[0][1], line[1][0],line[1][1]
         cv2.line(horver_img,(x1,y1),(x2,y2),(0,0,255),2)
@@ -281,15 +262,7 @@ def find_board(img):
                                 if  (lat[1] + 1) >= p_after[1] >= (lat[1] - 1):
                                     score += 1
                                     break
-                            #closest = min(lattice_pts, key=lambda e:(e[0]-p_after[0])**2 + (e[1]-p_after[1])**2)
-                            #diff = math.sqrt((closest[0]-p_after[0])**2 + (closest[1]-p_after[1])**2)
-                            #diff_list.append(diff)
-                            #print(diff)
-                            #score += diff
-                    #diff_list.sort()
-                    #score = 0
-                    #for i in range(0,200):
-                    #    score += diff_list[i]
+
                     print(score)
                     reject = False
 
@@ -461,14 +434,6 @@ def predict_board(board, flip):
        
             row_prediction.append(prediction)
 
-            """             ocr = PaddleOCR(use_angle_cls=True, lang='en') # need to run only once to download and load model into memory
-    
-            result = ocr.ocr(box, cls=True)
-            for idx in range(len(result)):
-                res = result[idx]
-                print(res)
-            
-            cv2.waitKey(0) """
             #boxes.append(a)
         print(row_prediction)
         predicted_board.append(row_prediction)
@@ -760,7 +725,7 @@ def lambda_handler(event, context):
 
 # Read image
 wordlist =  set(open('csw19.txt').read().split())
-rel_base_path = "Photos-001/temp/"
+rel_base_path = "samples/temp/"
 #mypath = "/Users/carson/Downloads/sudoku-solver-python/" + rel_base_path
 #files = [f for f in listdir(rel_base_path) if isfile(join(rel_base_path, f))]
 #random.shuffle(files)
