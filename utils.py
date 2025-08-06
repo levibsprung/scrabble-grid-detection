@@ -1,4 +1,4 @@
-from config import *
+from ScrabbleGridDetection.config import *
 from time import time
 from copy import copy
 

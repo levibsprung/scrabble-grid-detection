@@ -9,8 +9,8 @@ from solver import *
 from PIL import Image
 from os import listdir
 from os.path import isfile, join
-from config import *
-from slid import pSLID, SLID, slid_tendency #== step 1
+from ScrabbleGridDetection.config import *
+from ScrabbleGridDetection.slid import pSLID, SLID, slid_tendency #== step 1
 #from paddleocr import PaddleOCR,draw_ocr
 
 import bisect
@@ -24,6 +24,11 @@ import datetime
 import time
 import base64
 import io
+
+def post(img, message="img"):
+    cv2.imshow(message, img)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 def get_surrounding_boxes(x,y,dist=1):
     sb = []
@@ -110,7 +115,7 @@ def find_board(img):
 
     height, width, channels = img.shape 
 
-    img = img[int(height * 0.08 ): int(height * 0.92), :]
+    # img = img[int(height * 0.08 ): int(height * 0.92), :]
     #cv2.imshow("cropped", img)
     height, width, channels = img.shape
     img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -119,28 +124,40 @@ def find_board(img):
     kernel = np.ones((3,3),np.uint8)
 
     # Lower mask (0-10)
-    lower_red = np.array([0, 50, 50])
+    lower_red = np.array([0, 75, 75])
     upper_red = np.array([10, 255, 255])
     mask0 = cv2.inRange(img_hsv, lower_red, upper_red)
     
+    '''
+    7, 68, 158
+    
+    '''
+    
     # Upper mask (170-180)
-    lower_red = np.array([168, 50, 50])
+    lower_red = np.array([168, 75, 75])
     upper_red = np.array([180, 255, 255])
     mask1 = cv2.inRange(img_hsv, lower_red, upper_red)
     
+    
     # Join the masks
     red_mask = mask0 | mask1
+    
+    # post(mask1)
     
     eroded = cv2.erode(red_mask,kernel,iterations = 8)
     red_dilated = cv2.dilate(eroded,kernel,iterations = 9)
     red_dilated = cv2.erode(red_dilated,kernel,iterations = 5)
     #cv2.imshow("red dilated", red_dilated)
 
+    # post(red_dilated)
+
     keypoints = cv2.findContours(red_dilated.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     contours  = imutils.grab_contours(keypoints)
 
     newimg = cv2.drawContours(img.copy(), contours, -1, (0, 255, 0), 3)
     #cv2.imshow("Contour", newimg)
+    
+    # post(newimg)
 
     contours = sorted(contours, key=cv2.contourArea, reverse=True)[:15]
 
@@ -160,6 +177,8 @@ def find_board(img):
         cv2.drawContours(newimg3, contour, -1, (0, 255, 0), 3)
         cv2.drawContours(newimg2, approx, -1, (0, 255, 0), 3)
     
+    
+    
     # Find lines 
 	# --- 1 step --- find all possible lines ----------------
     segments = pSLID(img)
@@ -170,6 +189,8 @@ def find_board(img):
         #print(line[0][0])
         cv2.line(lines_img,(line[0][0],line[0][1]),(line[1][0],line[1][1]),(255,0,0),2)
     #cv2.imshow("lines_img", lines_img)
+    
+    # post(lines_img)
 
     hor = []
     ver = []
@@ -184,15 +205,17 @@ def find_board(img):
             cv2.line(horver_img,(x1,y1),(x2,y2),(255,0,0),2)
             hor.append(line)
 
+    # post(horver_img)
+
     hml = ((1,height/2),(100,height/2))
     vml = ((width/2,1),(width/2,100))
 
     ver = sorted(ver, key=lambda line: line_intersection(line, hml)[0])
-    ver_left = ver[:4]
-    ver_right = ver[-4:]
+    ver_left = ver[:len(ver)//2]
+    ver_right = ver[-len(ver)//2:]
     hor = sorted(hor, key=lambda line: line_intersection(line, vml)[1])
-    hor_top = hor[:4]
-    hor_bottom = hor[-4:]
+    hor_top = hor[:len(hor)//2]
+    hor_bottom = hor[-len(hor)//2:]
 
     h_ref_pts = []
     v_ref_pts = []
@@ -206,7 +229,7 @@ def find_board(img):
         for h in hor:
             lattice_pts.append(line_intersection(v,h))
     lattice_pts.sort()
-    print(len(lattice_pts))
+    # print(len(lattice_pts))
 
     for line in ver_left + ver_right :
         x1,y1,x2,y2 = line[0][0],line[0][1], line[1][0],line[1][1]
@@ -215,6 +238,8 @@ def find_board(img):
         x1,y1,x2,y2 = line[0][0],line[0][1], line[1][0],line[1][1]
         cv2.line(horver_img,(x1,y1),(x2,y2),(0,255,0),2)
     candidates = []
+    
+    # post(horver_img)
 
     for vl in ver_left:
         for vr in ver_right:
@@ -229,6 +254,17 @@ def find_board(img):
                     b = math.dist(bl,br)
                     l = math.dist(tl,bl)
                     r = math.dist(tr,br)
+                    
+                    area = cv2.contourArea(np.array([tl,tr,br,bl], dtype=np.int32))
+                    
+                    sides = [l, r, t, b]
+                    meanSide = np.mean(sides)
+                    varSide = [abs(side - meanSide) / meanSide for side in sides]
+                    
+                    avgWidth = (t + b) / 2
+                    avgHeight = (l + r) / 2
+                    ratio = min(avgWidth, avgHeight) / max(avgWidth, avgHeight)
+                    
 
                     if not (l > 0 and r > 0  and t > 0 and b > 0):
                         continue
@@ -262,12 +298,12 @@ def find_board(img):
                                     score += 1
                                     break
 
-                    print(score)
+                    # print(score)
                     reject = False
 
                     #print(t,b,l,r, sd)
                     cnt = np.array([tl,tr,br,bl], dtype=np.int32)
-                    print(cnt)
+                    # print(cnt)
                     if not any(cv2.pointPolygonTest(cnt, rc, False) < 0 for rc in red_dots):
                         score += 100
                     if reject == False:
@@ -275,7 +311,7 @@ def find_board(img):
                         heapq.heappush(candidates, (1/score, (tr,tl,bl,br)))
     
     top_candidates = heapq.nsmallest(3, candidates)
-    print(top_candidates)
+    # print(top_candidates)
 
     #cv2.waitKey(0)
     predicted_board_list = []
@@ -300,22 +336,25 @@ def find_board(img):
                     p_after = (int(px), int(py))
                     cv2.circle(split,p_after, 8, (255,0,255), -1)
             #cv2.imshow("split", split)
+            # post(split)
             for corner in score_and_corners[1]:
                 #print(a)
                 cv2.circle(horver_img,corner, 8, (r,g,b), -1)
             #cv2.imshow("horver_img", horver_img)
-            print(corners[0][0] + 2)
-            print(corners)
+            # post(horver_img, str(score_and_corners[0]))
+            # print(corners[0][0] + 2)
+            # print(corners)
             # improve the chance of getting bottom row and right most column 
             corners2 = ((corners[0][0] + 4, corners[0][1] - 2),(corners[1][0], corners[1][1] - 2),(corners[2][0], corners[2][1]),(corners[3][0] + 4,corners[3][1]))
+            predicted_board_list.append(score_and_corners)
  
-            perspective = get_perspective(img, corners2)
+            # perspective = get_perspective(img, corners2)
             #cv2.imshow("perspective", perspective)
             
-            predicted_board = predict_board(perspective, True)
-            predicted_board_list.append((predicted_board, corners2))
-            predicted_board = predict_board(perspective, False)
-            predicted_board_list.append((predicted_board, corners2))
+            # predicted_board = predict_board(perspective, True)
+            # predicted_board_list.append((predicted_board, corners2))
+            # predicted_board = predict_board(perspective, False)
+            # predicted_board_list.append((predicted_board, corners2))
             #ocr = PaddleOCR(use_angle_cls=True, lang='en') # need to run only once to download and load model into memory
             #result = ocr.ocr(gray, cls=True)
             #for idx in range(len(result)):
@@ -331,13 +370,14 @@ def find_board(img):
             #im_show = draw_ocr(image, boxes, txts, scores, font_path='./fonts/simfang.ttf')
             #im_show = Image.fromarray(im_show)
             #im_show.save('result.jpg')
-            print("score")
-            print(1/score_and_corners[0])
+            # print("score")
+            # print(1/score_and_corners[0])
             #cv2.waitKey(0)
    
     #result = get_perspective(img, four_corners)
     ##cv2.imshow("perspective", result) 
     #cv2.waitKey(0)
+    # return max(predicted_board_list, key=lambda x: x[1])[0] if len(predicted_board_list) != 0 else None
     return predicted_board_list
 
 
@@ -718,65 +758,71 @@ def lambda_handler(event, context):
 # load dictionary
 #wordlist =  set(open('csw19.txt').read().split())
 #print(wordlist)
+if __name__ == "__main__":
+# img = cv2.imread(r'C:\Users\levis\Projects\ScrabbleBase\gameImages\noaruco.png')
+    img = cv2.imread(r'C:\Users\levis\Projects\ScrabbleBase\gameImages\notmyboard2.png')
 
-# Read image
-wordlist =  set(open('csw19.txt').read().split())
-rel_base_path = "samples/temp/"
-#mypath = "/Users/carson/Downloads/sudoku-solver-python/" + rel_base_path
-#files = [f for f in listdir(rel_base_path) if isfile(join(rel_base_path, f))]
-#random.shuffle(files)
-files = []
-#files = ["f92583e9-178a-45a0-a2e3-d54890eef51a.jpg"]
-# oblique angle failed onlyfiles = ["c51347c6-8dc5-446a-ab62-7a3f9f8da538.jpg"]
-#/Users/carson/Downloads/sudoku-solver-python/Photos-001/temp/5ea4add7-2cd6-4615-86d6-6f40a20c1c8d.jpg
-#/Users/carson/Downloads/sudoku-solver-python/Photos-001/temp/8922a3cf-64dc-4b54-ae62-392f725cf41e.jpg
-#83ae0c39-f1e2-433a-a95f-2bea1c2601d6.jpg angle issue
-#onlyfiles = ["9ed97c67-d7a2-4444-9014-a361cc166af0.jpg"]
-#checking missing light tiles 84cad9df-6439-4c26-a69e-5834ef97e591.jpg
-#white tiles Photos-001/temp/fb4bb776-78ea-4d16-afbf-c5cd36b4de9e.jpg
-#glare detects letters /Users/carson/Downloads/sudoku-solver-python/Photos-001/temp/0bcc9d8d-4a7e-497f-a7b4-b5627ff72624.jpg
+    board = find_board(img)
 
-ct = datetime.datetime.now()
-file_path = join("/tmp", str(ct))
-try:
-   
-     for file in files:
-         f = open(file_path, "a")
-         orig_file = rel_base_path + file
-         print(orig_file + " starts",file=f)
-         img = cv2.imread(rel_base_path + file) 
-         predicted_board_list = find_board(img)
-         eval = []
-         for pb in predicted_board_list:
-             invalid_words, board, valid_shape, island_count = evaluate_predicted_board(pb)
-             if valid_shape and (island_count <= 2):
-                 eval.append((len(invalid_words), invalid_words, board, valid_shape, island_count))
-         eval.sort()
-         # best eval
-         if len(eval) > 0:
-             best_eval = eval[0]
-             print("no. of invalid words")
-             print(str(best_eval[0]),file=f)
-             print(str(best_eval[1]),file=f)
-             print(str(best_eval[3]),file=f)
-             print(str(best_eval[4]),file=f)
-             for row in best_eval[2]:
-                 row_text = ""
-                 for col in row:
-                     row_text += col
-                 print(row_text, file=f)
-         else :
-             print("no solutions")
-         print(rel_base_path + file + " ends",file=f)
-         #cv2.waitKey(0)
-         f.close()
-         #gray = cv2.cvtColor(board, cv2.COLOR_BGR2GRAY)
-         #print(gray.shape)
-         #rois = split_boxes(gray)
-     ##cv2.imshow("Input image", img)
-     ##cv2.imshow("Board", board)
-   
-except Exception as e:
-     print(repr(e))
-#cv2.waitKey(0)
-#cv2.destroyAllWindows()
+
+    # Read image
+    wordlist =  set(open('csw19.txt').read().split())
+    rel_base_path = "samples/temp/"
+    #mypath = "/Users/carson/Downloads/sudoku-solver-python/" + rel_base_path
+    #files = [f for f in listdir(rel_base_path) if isfile(join(rel_base_path, f))]
+    #random.shuffle(files)
+    files = []
+    #files = ["f92583e9-178a-45a0-a2e3-d54890eef51a.jpg"]
+    # oblique angle failed onlyfiles = ["c51347c6-8dc5-446a-ab62-7a3f9f8da538.jpg"]
+    #/Users/carson/Downloads/sudoku-solver-python/Photos-001/temp/5ea4add7-2cd6-4615-86d6-6f40a20c1c8d.jpg
+    #/Users/carson/Downloads/sudoku-solver-python/Photos-001/temp/8922a3cf-64dc-4b54-ae62-392f725cf41e.jpg
+    #83ae0c39-f1e2-433a-a95f-2bea1c2601d6.jpg angle issue
+    #onlyfiles = ["9ed97c67-d7a2-4444-9014-a361cc166af0.jpg"]
+    #checking missing light tiles 84cad9df-6439-4c26-a69e-5834ef97e591.jpg
+    #white tiles Photos-001/temp/fb4bb776-78ea-4d16-afbf-c5cd36b4de9e.jpg
+    #glare detects letters /Users/carson/Downloads/sudoku-solver-python/Photos-001/temp/0bcc9d8d-4a7e-497f-a7b4-b5627ff72624.jpg
+
+    # ct = datetime.datetime.now()
+    # file_path = join("/tmp", str(ct))
+    # try:
+    
+    #      for file in files:
+    #          f = open(file_path, "a")
+    #          orig_file = rel_base_path + file
+    #          print(orig_file + " starts",file=f)
+    #          img = cv2.imread(rel_base_path + file) 
+    #          predicted_board_list = find_board(img)
+    #          eval = []
+    #          for pb in predicted_board_list:
+    #              invalid_words, board, valid_shape, island_count = evaluate_predicted_board(pb)
+    #              if valid_shape and (island_count <= 2):
+    #                  eval.append((len(invalid_words), invalid_words, board, valid_shape, island_count))
+    #          eval.sort()
+    #          # best eval
+    #          if len(eval) > 0:
+    #              best_eval = eval[0]
+    #              print("no. of invalid words")
+    #              print(str(best_eval[0]),file=f)
+    #              print(str(best_eval[1]),file=f)
+    #              print(str(best_eval[3]),file=f)
+    #              print(str(best_eval[4]),file=f)
+    #              for row in best_eval[2]:
+    #                  row_text = ""
+    #                  for col in row:
+    #                      row_text += col
+    #                  print(row_text, file=f)
+    #          else :
+    #              print("no solutions")
+    #          print(rel_base_path + file + " ends",file=f)
+    #          #cv2.waitKey(0)
+    #          f.close()
+    #          #gray = cv2.cvtColor(board, cv2.COLOR_BGR2GRAY)
+    #          #print(gray.shape)
+    #          #rois = split_boxes(gray)
+    #      ##cv2.imshow("Input image", img)
+    #      ##cv2.imshow("Board", board)
+    
+    # except Exception as e:
+    #      print(repr(e))
+    #cv2.waitKey(0)
+    #cv2.destroyAllWindows()

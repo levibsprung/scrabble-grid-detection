@@ -1,4 +1,4 @@
-from config import *
+from ScrabbleGridDetection.config import *
 from random import randint
 from copy import copy
 

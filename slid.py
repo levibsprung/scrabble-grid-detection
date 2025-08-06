@@ -1,5 +1,5 @@
-import utils, debug
-from config import *
+from ScrabbleGridDetection import utils, debug
+from ScrabbleGridDetection.config import *
 
 import math
 import cv2, numpy as np
@@ -39,6 +39,7 @@ NC_SLID_CLAHE = [[3,   (2, 6),    5], # @1
 		         [3,   (6, 2),    5], # @2
 				 [5,   (3, 3),    5], # @3
 				 [0,   (0, 0),    0]] # EE
+
 
 ################################################################################
 
